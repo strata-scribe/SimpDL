@@ -1,8 +1,8 @@
-import os
 import json
-import webbrowser
+import os
 import tkinter as tk
-from tkinter import messagebox
+import webbrowser
+
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 

@@ -1,6 +1,8 @@
+from io import BytesIO
+
 import requests
 from PIL import Image
-from io import BytesIO
+
 
 def get_image_src(driver, image_element):
     try:
