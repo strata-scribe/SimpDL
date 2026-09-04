@@ -3,9 +3,10 @@ Link Generation Utilities
 Generate paginated URLs for forum threads.
 """
 
+
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
-import tkinter as tk
+
 
 def generate_links(base_link, num_pages):
     """Generate paginated links from base URL."""
@@ -119,8 +120,7 @@ def build_generate_links_frame(parent, urls_file, refresh_urls_func=None):
             links = generate_links(base_link, num_pages)
 
             with open(urls_file, "w") as f:
-                for link in links:
-                    f.write(link + "\n")
+                f.writelines(link + "\n" for link in links)
 
             status_label.config(
                 text=f"✓ Successfully generated {num_pages} URLs!",
@@ -132,7 +132,7 @@ def build_generate_links_frame(parent, urls_file, refresh_urls_func=None):
 
         except ValueError as e:
             status_label.config(
-                text=f"✗ Error: {str(e)}",
+                text=f"✗ Error: {e!s}",
                 bootstyle="danger"
             )
 

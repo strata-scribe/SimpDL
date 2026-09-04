@@ -5,8 +5,9 @@ This method is MORE RELIABLE than copying individual cookies.
 Run this script to extract your authentication cookies from your browser.
 """
 
-import os
 import json
+import os
+
 
 def generate_links(base_link, num_pages):
     """
@@ -97,7 +98,7 @@ IMPORTANT: Make sure the URL in your browser is simpcity.cr (NOT .su)!
     print("="*70)
     print(f"\nSaved to: {cookie_file}")
     print(f"\nFound {len(cookie_dict)} cookies:")
-    for name in cookie_dict.keys():
+    for name in cookie_dict:
         print(f"  • {name}")
     
     print("\n🚀 Now run: python test_cookies.py")
