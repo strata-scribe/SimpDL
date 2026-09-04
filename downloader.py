@@ -1,14 +1,16 @@
-import os
-import time
 import json
-import requests
-import tkinter as tk
+import os
 import threading
+import time
+import tkinter as tk
+
+import requests
 import ttkbootstrap as tb
-from ttkbootstrap.constants import *
 from bs4 import BeautifulSoup
+from ttkbootstrap.constants import *
 
 from image_utils import is_valid_image
+
 
 def build_download_frame(parent, config_path, urls_file):
     """
@@ -377,21 +379,21 @@ NOTE: Cookies expire! If download fails, extract fresh cookies.
                         time.sleep(2)
                 
                 except Exception as e:
-                    log_message(f"ERROR on page {current_page}: {str(e)}")
+                    log_message(f"ERROR on page {current_page}: {e!s}")
 
             log_message(f"\n{'='*50}")
-            log_message(f"DOWNLOAD COMPLETE!")
+            log_message("DOWNLOAD COMPLETE!")
             log_message(f"Total images downloaded: {total_downloaded}")
             log_message(f"Saved to: {combined_output_dir}")
             log_message(f"{'='*50}")
 
         except FileNotFoundError as e:
-            log_message(f"ERROR: File not found - {str(e)}")
+            log_message(f"ERROR: File not found - {e!s}")
         except json.JSONDecodeError:
             log_message("ERROR: Invalid JSON in manual_cookies.json")
             log_message("Please check the file format.")
         except Exception as e:
-            log_message(f"ERROR: {str(e)}")
+            log_message(f"ERROR: {e!s}")
             import traceback
             log_message(traceback.format_exc())
 
@@ -413,9 +415,8 @@ NOTE: Cookies expire! If download fails, extract fresh cookies.
             if idx + 1 < len(parts):
                 # Remove page-X suffix if present
                 folder = parts[idx + 1]
-                if folder.startswith('page-'):
-                    if idx + 2 < len(parts):
-                        folder = parts[idx + 2]
+                if folder.startswith('page-') and idx + 2 < len(parts):
+                    folder = parts[idx + 2]
                 return folder.split('?')[0]  # Remove query params
         return "default_folder"
 

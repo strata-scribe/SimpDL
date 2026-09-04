@@ -1,5 +1,7 @@
 import time
+
 from selenium.webdriver.common.by import By
+
 
 def login_to_simpcity(driver, username, password):
     print("Logging in...")

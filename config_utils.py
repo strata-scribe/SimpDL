@@ -1,10 +1,11 @@
 import json
 import os
 import tkinter as tk
-import ttkbootstrap as tb
+from tkinter import filedialog
+
 from ttkbootstrap.constants import *
 from ttkbootstrap.scrolled import ScrolledFrame
-from tkinter import filedialog
+
 
 def build_config_frame(parent, config_path):
     """Ultra-sleek settings interface."""
@@ -142,7 +143,7 @@ def build_config_frame(parent, config_path):
                 os.makedirs(new_path)
                 status_label.config(text="✓ Directory created and saved", foreground="#10b981")
             except Exception as e:
-                status_label.config(text=f"✗ Error: {str(e)}", foreground="#ef4444")
+                status_label.config(text=f"✗ Error: {e!s}", foreground="#ef4444")
                 return
         else:
             status_label.config(text="✓ Configuration saved", foreground="#10b981")
@@ -220,8 +221,7 @@ def build_urls_frame(parent, urls_file):
             loaded_urls = get_urls_from_file()
             loaded_urls.append(new_url)
             with open(urls_file, "w") as f:
-                for u in loaded_urls:
-                    f.write(u + "\n")
+                f.writelines(u + "\n" for u in loaded_urls)
             url_entry.delete(0, "end")
             refresh_list()
 
@@ -360,8 +360,7 @@ def build_urls_frame(parent, urls_file):
         if 0 <= index < len(loaded_urls):
             loaded_urls.pop(index)
             with open(urls_file, "w") as f:
-                for u in loaded_urls:
-                    f.write(u + "\n")
+                f.writelines(u + "\n" for u in loaded_urls)
         refresh_list()
 
     refresh_list()
