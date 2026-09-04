@@ -134,6 +134,47 @@ def build_download_frame(parent, config_path, urls_file):
         log_text.insert(tk.END, msg + "\n")
         log_text.see(tk.END)
 
+    def download_image_with_retry(session, img_url, filepath, headers, max_retries=5):
+        for attempt in range(max_retries):
+            try:
+                img_response = session.get(img_url, timeout=15, headers=headers, stream=True)
+
+                if img_response.status_code in [429, 502, 503, 504]:
+                    wait_time = 2 ** attempt
+                    log_message(f"  ⚠️ HTTP {img_response.status_code} for image. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+
+                if img_response.status_code == 200:
+                    expected_length = img_response.headers.get('Content-Length')
+                    expected_length = int(expected_length) if expected_length and expected_length.isdigit() else None
+
+                    downloaded_size = 0
+                    with open(filepath, 'wb') as f:
+                        for chunk in img_response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded_size += len(chunk)
+
+                    if expected_length and downloaded_size < expected_length:
+                        log_message(f"  ⚠️ Incomplete download ({downloaded_size}/{expected_length} bytes). Retrying...")
+                        wait_time = 2 ** attempt
+                        time.sleep(wait_time)
+                        continue
+
+                    return True
+                else:
+                    log_message(f"  ✗ Failed: HTTP {img_response.status_code}")
+                    return False
+
+            except requests.RequestException as e:
+                wait_time = 2 ** attempt
+                log_message(f"  ⚠️ Connection error: {str(e)[:50]}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+
+        log_message(f"  ✗ Failed after {max_retries} attempts.")
+        return False
+
     def start_download():
         if download_in_progress[0]:
             return
@@ -190,9 +231,21 @@ def build_download_frame(parent, config_path, urls_file):
 
     def download_page_with_requests(session, url):
         """Use requests for pages 2+"""
-        response = session.get(url, timeout=30)
-        if response.status_code == 200:
-            return response.text
+        for attempt in range(5):
+            try:
+                response = session.get(url, timeout=30)
+                if response.status_code in [429, 502, 503, 504]:
+                    wait_time = 2 ** attempt
+                    log_message(f"⚠️ HTTP {response.status_code} on page fetch. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                if response.status_code == 200:
+                    return response.text
+                return None
+            except requests.RequestException as e:
+                wait_time = 2 ** attempt
+                log_message(f"⚠️ Connection error on page fetch: {str(e)[:50]}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
         return None
 
     def run_download():
@@ -301,15 +354,12 @@ def build_download_frame(parent, config_path, urls_file):
                                 img_headers = session.headers.copy()
                                 img_headers['Referer'] = url
                                 
-                                img_response = session.get(img_url, timeout=15, headers=img_headers)
+                                filename = f"image_{len(os.listdir(combined_output_dir)) + 1}.jpg"
+                                filepath = os.path.join(combined_output_dir, filename)
                                 
-                                if img_response.status_code == 200:
-                                    filename = f"image_{len(os.listdir(combined_output_dir)) + 1}.jpg"
-                                    filepath = os.path.join(combined_output_dir, filename)
-                                    
-                                    with open(filepath, 'wb') as f:
-                                        f.write(img_response.content)
-                                    
+                                success = download_image_with_retry(session, img_url, filepath, img_headers)
+
+                                if success:
                                     page_downloaded += 1
                                     total_downloaded += 1
                                     log_message(f"  ✓ Downloaded: {filename}")
