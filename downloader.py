@@ -44,6 +44,47 @@ def build_download_frame(parent, config_path, urls_file):
         log_text.insert(tk.END, msg + "\n")
         log_text.see(tk.END)
 
+    def download_image_with_retry(session, img_url, filepath, headers, max_retries=5):
+        for attempt in range(max_retries):
+            try:
+                img_response = session.get(img_url, timeout=15, headers=headers, stream=True)
+
+                if img_response.status_code in [429, 502, 503, 504]:
+                    wait_time = 2 ** attempt
+                    log_message(f"  ⚠️ HTTP {img_response.status_code} for image. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+
+                if img_response.status_code == 200:
+                    expected_length = img_response.headers.get('Content-Length')
+                    expected_length = int(expected_length) if expected_length and expected_length.isdigit() else None
+
+                    downloaded_size = 0
+                    with open(filepath, 'wb') as f:
+                        for chunk in img_response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded_size += len(chunk)
+
+                    if expected_length and downloaded_size < expected_length:
+                        log_message(f"  ⚠️ Incomplete download ({downloaded_size}/{expected_length} bytes). Retrying...")
+                        wait_time = 2 ** attempt
+                        time.sleep(wait_time)
+                        continue
+
+                    return True
+                else:
+                    log_message(f"  ✗ Failed: HTTP {img_response.status_code}")
+                    return False
+
+            except requests.RequestException as e:
+                wait_time = 2 ** attempt
+                log_message(f"  ⚠️ Connection error: {str(e)[:50]}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+
+        log_message(f"  ✗ Failed after {max_retries} attempts.")
+        return False
+
     def show_cookie_instructions():
         """Show instructions for extracting cookies"""
         instructions_text = """
@@ -225,9 +266,28 @@ NOTE: Cookies expire! If download fails, extract fresh cookies.
                     else:
                         request_headers['Referer'] = 'https://simpcity.cr/'
                     
-                    response = session.get(url, timeout=30, headers=request_headers, allow_redirects=True)
-                    
-                    log_message(f"Response status: {response.status_code}")
+                    response = None
+                    for attempt in range(5):
+                        try:
+                            response = session.get(url, timeout=30, headers=request_headers, allow_redirects=True)
+                            log_message(f"Response status: {response.status_code}")
+
+                            if response.status_code in [429, 502, 503, 504]:
+                                wait_time = 2 ** attempt
+                                log_message(f"⚠️ HTTP {response.status_code} on page fetch. Retrying in {wait_time}s...")
+                                if attempt < 4:
+                                    time.sleep(wait_time)
+                                continue
+                            break
+                        except requests.RequestException as e:
+                            wait_time = 2 ** attempt
+                            log_message(f"⚠️ Connection error on page fetch: {str(e)[:50]}. Retrying in {wait_time}s...")
+                            if attempt < 4:
+                                time.sleep(wait_time)
+
+                    if not response:
+                        log_message("Failed to fetch page after retries.")
+                        continue
                     
                     if response.status_code == 403:
                         log_message("⚠️ ERROR 403: Access Forbidden")
@@ -288,21 +348,15 @@ NOTE: Cookies expire! If download fails, extract fresh cookies.
                                 img_headers['Referer'] = url
                                 img_headers['Accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
                                 
-                                img_response = session.get(img_url, timeout=15, headers=img_headers)
+                                filename = f"image_{len(os.listdir(combined_output_dir)) + 1}.jpg"
+                                filepath = os.path.join(combined_output_dir, filename)
+
+                                success = download_image_with_retry(session, img_url, filepath, img_headers)
                                 
-                                if img_response.status_code == 200:
-                                    filename = f"image_{len(os.listdir(combined_output_dir)) + 1}.jpg"
-                                    filepath = os.path.join(combined_output_dir, filename)
-                                    
-                                    with open(filepath, 'wb') as f:
-                                        f.write(img_response.content)
-                                    
+                                if success:
                                     page_downloaded += 1
                                     total_downloaded += 1
                                     log_message(f"  ✓ Downloaded: {filename} ({page_downloaded} on this page)")
-                                    
-                                else:
-                                    log_message(f"  ✗ Failed: HTTP {img_response.status_code}")
                         except Exception as e:
                             log_message(f"  ✗ Error downloading: {str(e)[:50]}")
                         
