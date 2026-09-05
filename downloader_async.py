@@ -79,7 +79,7 @@ class AsyncChunkedDownloader:
             except Exception as e:
                 self.logger.warning(f"Chunk {start}-{end} attempt {attempt + 1} failed: {e}")
                 if attempt == self.max_retries - 1:
-                    raise e
+                    raise
                 # Exponential backoff
                 await asyncio.sleep(2 ** attempt)
 
@@ -98,19 +98,19 @@ class AsyncChunkedDownloader:
                 async with session.get(self.url, headers=self.headers) as response:
                     response.raise_for_status()
                     data = await response.read()
-                    with open(self.output_path, "wb") as f:
+                    with open(self.output_path, "wb") as f:  # noqa: ASYNC230
                         f.write(data)
                 return
 
             self.logger.info(f"Downloading {file_size} bytes in chunks of {self.chunk_size} bytes.")
 
             # Pre-allocate the file
-            with open(self.output_path, "wb") as file_obj:
+            with open(self.output_path, "wb") as file_obj:  # noqa: ASYNC230
                 file_obj.seek(file_size - 1)
                 file_obj.write(b'\0')
 
             # Open file for read/write
-            with open(self.output_path, "rb+") as file_obj:
+            with open(self.output_path, "rb+") as file_obj:  # noqa: ASYNC230
                 tasks = []
                 for start in range(0, file_size, self.chunk_size):
                     end = min(start + self.chunk_size - 1, file_size - 1)
