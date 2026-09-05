@@ -1,65 +1,14 @@
 import os
 import tempfile
-import time
 from unittest import mock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+import requests_mock
 
+from downloader import download_image_with_retry
 
-# We redefine the logic here just for unit testing since the original is nested inside a function
-def download_image_with_retry(session, img_url, filepath, headers, max_retries=5):
-    def log_message(msg):
-        pass # mock logging
-
-    for attempt in range(max_retries):
-        try:
-            req_headers = headers.copy()
-            initial_size = 0
-            if os.path.exists(filepath):
-                initial_size = os.path.getsize(filepath)
-                if initial_size > 0:
-                    req_headers['Range'] = f'bytes={initial_size}-'
-            img_response = session.get(img_url, timeout=15, headers=req_headers, stream=True)
-            if img_response.status_code == 416:
-                log_message(f'  ✓ Already downloaded: {os.path.basename(filepath)}')
-                return True
-            if img_response.status_code in [429, 502, 503, 504]:
-                wait_time = 2 ** attempt
-                log_message(f'  ⚠️ HTTP {img_response.status_code} for image. Retrying in {wait_time}s...')
-                time.sleep(wait_time)
-                continue
-            if img_response.status_code in [200, 206]:
-                expected_length_header = img_response.headers.get('Content-Length')
-                expected_length = int(expected_length_header) if expected_length_header and expected_length_header.isdigit() else None
-                if img_response.status_code == 206:
-                    mode = 'ab'
-                    if expected_length:
-                        expected_length += initial_size
-                else:
-                    mode = 'wb'
-                    initial_size = 0
-                downloaded_size = initial_size
-                with open(filepath, mode) as f:
-                    for chunk in img_response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded_size += len(chunk)
-                if expected_length and downloaded_size < expected_length:
-                    log_message(f'  ⚠️ Incomplete download ({downloaded_size}/{expected_length} bytes). Retrying...')
-                    wait_time = 2 ** attempt
-                    time.sleep(wait_time)
-                    continue
-                return True
-            else:
-                log_message(f'  ✗ Failed: HTTP {img_response.status_code}')
-                return False
-        except requests.RequestException as e:
-            wait_time = 2 ** attempt
-            log_message(f'  ⚠️ Connection error: {str(e)[:50]}. Retrying in {wait_time}s...')
-            time.sleep(wait_time)
-    log_message(f'  ✗ Failed after {max_retries} attempts.')
-    return False
 
 class MockResponse:
     def __init__(self, content, status_code, headers=None):
@@ -157,3 +106,62 @@ def test_download_image_with_retry_retries(mock_sleep, temp_dir):
     assert session.get.call_count == 3
     with open(filepath, "rb") as f:
         assert f.read() == b"success"
+
+
+@pytest.fixture
+def mock_session():
+    session = requests.Session()
+    return session
+
+
+@patch("time.sleep", return_value=None)
+def test_download_image_with_retry_timeout(mock_sleep, mock_session, tmp_path):
+    img_url = "http://test.com/image.jpg"
+    filepath = str(tmp_path / "image.jpg")
+    headers = {}
+    mock_log = MagicMock()
+
+    with requests_mock.Mocker() as m:
+        m.get(img_url, exc=requests.exceptions.Timeout("Connection timed out"))
+
+        result = download_image_with_retry(mock_session, img_url, filepath, headers, mock_log, max_retries=3)
+
+        assert result is False
+        assert mock_sleep.call_count == 3
+        # Should backoff exponentially: 2**0, 2**1, 2**2
+        assert mock_sleep.call_args_list[0][0][0] == 1
+        assert mock_sleep.call_args_list[1][0][0] == 2
+        assert mock_sleep.call_args_list[2][0][0] == 4
+
+
+@patch("time.sleep", return_value=None)
+def test_download_image_with_retry_403(mock_sleep, mock_session, tmp_path):
+    img_url = "http://test.com/image.jpg"
+    filepath = str(tmp_path / "image.jpg")
+    headers = {}
+    mock_log = MagicMock()
+
+    with requests_mock.Mocker() as m:
+        m.get(img_url, status_code=403)
+
+        result = download_image_with_retry(mock_session, img_url, filepath, headers, mock_log, max_retries=3)
+
+        assert result is False
+        assert mock_sleep.call_count == 0
+
+
+def test_download_image_with_retry_insufficient_disk_space(mock_session, tmp_path):
+    img_url = "http://test.com/image.jpg"
+    filepath = str(tmp_path / "image.jpg")
+    headers = {}
+    mock_log = MagicMock()
+
+    with requests_mock.Mocker() as m:
+        m.get(img_url, content=b"test data", status_code=200)
+
+        # Mock open to raise OSError with ENOSPC
+        with patch("builtins.open", side_effect=OSError(28, "No space left on device")):
+            with pytest.raises(OSError) as excinfo:
+                download_image_with_retry(mock_session, img_url, filepath, headers, mock_log, max_retries=3)
+
+            assert "No space left on device" in str(excinfo.value)
