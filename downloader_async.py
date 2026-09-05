@@ -1,7 +1,8 @@
 import asyncio
-import aiohttp
-import os
 import logging
+
+import aiohttp
+
 
 class AsyncChunkedDownloader:
     """

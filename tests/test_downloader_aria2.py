@@ -1,6 +1,8 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from downloader_aria2 import Aria2RPCBridge
+
 
 class TestAria2RPCBridge(unittest.TestCase):
     def setUp(self):
@@ -35,7 +37,7 @@ class TestAria2RPCBridge(unittest.TestCase):
         gid = bridge_no_secret.add_uri("http://example.com/file.txt")
         self.assertEqual(gid, "gid-5678")
 
-        args, kwargs = mock_post.call_args
+        _, kwargs = mock_post.call_args
         payload = kwargs['json']
         self.assertEqual(payload['method'], "aria2.addUri")
         self.assertEqual(payload['params'][0], ["http://example.com/file.txt"])
@@ -50,7 +52,7 @@ class TestAria2RPCBridge(unittest.TestCase):
         status = self.bridge.tell_status("gid-1234", ["status"])
         self.assertEqual(status, {"status": "active"})
 
-        args, kwargs = mock_post.call_args
+        _, kwargs = mock_post.call_args
         payload = kwargs['json']
         self.assertEqual(payload['method'], "aria2.tellStatus")
         self.assertEqual(payload['params'][1], "gid-1234")
@@ -65,7 +67,7 @@ class TestAria2RPCBridge(unittest.TestCase):
         res = self.bridge.remove("gid-1234")
         self.assertEqual(res, "gid-1234")
 
-        args, kwargs = mock_post.call_args
+        _, kwargs = mock_post.call_args
         payload = kwargs['json']
         self.assertEqual(payload['method'], "aria2.remove")
         self.assertEqual(payload['params'][1], "gid-1234")

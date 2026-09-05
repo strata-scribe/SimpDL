@@ -1,8 +1,7 @@
-import pytest
-import asyncio
-import os
 import aiohttp
+import pytest
 from aiohttp import web
+
 from downloader_async import AsyncChunkedDownloader
 
 # Mock aiohttp server for testing
@@ -81,6 +80,7 @@ async def handle_flaky_head(request):
     return web.Response(status=200, headers=headers)
 
 import pytest_asyncio
+
 
 @pytest_asyncio.fixture
 async def aiohttp_server_mock(aiohttp_server):

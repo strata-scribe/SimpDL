@@ -1,7 +1,8 @@
-import json
 import logging
 import uuid
+
 import requests
+
 
 class Aria2RPCBridge:
     """
@@ -35,11 +36,12 @@ class Aria2RPCBridge:
             response.raise_for_status()
             data = response.json()
             if "error" in data:
-                raise ValueError(f"Aria2 RPC Error: {data['error'].get('message', 'Unknown Error')}")
+                error_msg = data['error'].get('message', 'Unknown Error')
+                raise ValueError(error_msg)
             return data.get("result")
         except requests.RequestException as e:
-            self.logger.error(f"Failed to connect to Aria2 RPC: {e}")
-            raise ConnectionError(f"Aria2 RPC Connection failed: {e}")
+            self.logger.exception("Failed to connect to Aria2 RPC")
+            raise ConnectionError("Aria2 RPC Connection failed") from e
 
     def add_uri(self, urls, options=None):
         """

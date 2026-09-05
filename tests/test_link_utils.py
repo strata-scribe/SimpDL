@@ -1,5 +1,5 @@
-import pytest
 from link_utils import classify_url, extract_query_params
+
 
 def test_classify_url():
     # SimpCity

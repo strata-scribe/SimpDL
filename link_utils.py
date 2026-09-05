@@ -4,12 +4,12 @@ Generate paginated URLs for forum threads.
 """
 
 
+import re
+from urllib.parse import parse_qs, urlparse
+
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-
-import re
-from urllib.parse import urlparse, parse_qs
 
 def classify_url(url):
     """Classifies a URL into a media platform."""
