@@ -49,7 +49,20 @@ def build_download_frame(parent, config_path, urls_file):
     def download_image_with_retry(session, img_url, filepath, headers, max_retries=5):
         for attempt in range(max_retries):
             try:
-                img_response = session.get(img_url, timeout=15, headers=headers, stream=True)
+                # Prepare headers for potentially resuming download
+                req_headers = headers.copy()
+                initial_size = 0
+                if os.path.exists(filepath):
+                    initial_size = os.path.getsize(filepath)
+                    if initial_size > 0:
+                        req_headers['Range'] = f'bytes={initial_size}-'
+
+                img_response = session.get(img_url, timeout=15, headers=req_headers, stream=True)
+
+                if img_response.status_code == 416:
+                    # 416 Range Not Satisfiable means we probably already downloaded the whole file
+                    log_message(f"  ✓ Already downloaded: {os.path.basename(filepath)}")
+                    return True
 
                 if img_response.status_code in [429, 502, 503, 504]:
                     wait_time = 2 ** attempt
@@ -57,12 +70,21 @@ def build_download_frame(parent, config_path, urls_file):
                     time.sleep(wait_time)
                     continue
 
-                if img_response.status_code == 200:
-                    expected_length = img_response.headers.get('Content-Length')
-                    expected_length = int(expected_length) if expected_length and expected_length.isdigit() else None
+                if img_response.status_code in [200, 206]:
+                    expected_length_header = img_response.headers.get('Content-Length')
+                    expected_length = int(expected_length_header) if expected_length_header and expected_length_header.isdigit() else None
 
-                    downloaded_size = 0
-                    with open(filepath, 'wb') as f:
+                    if img_response.status_code == 206:
+                        mode = 'ab'
+                        if expected_length:
+                            expected_length += initial_size
+                    else:
+                        # Fallback if server doesn't support range requests
+                        mode = 'wb'
+                        initial_size = 0
+
+                    downloaded_size = initial_size
+                    with open(filepath, mode) as f:
                         for chunk in img_response.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
