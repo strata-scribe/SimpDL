@@ -7,6 +7,27 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 import tkinter as tk
 
+import re
+from urllib.parse import urlparse, parse_qs
+
+def classify_url(url):
+    """Classifies a URL into a media platform."""
+    patterns = {
+        'SimpCity': r'https?://(?:www\.)?simpcity\.cr(?:/.*)?',
+        'Imgur': r'https?://(?:www\.)?imgur\.com(?:/.*)?',
+        'ImageBam': r'https?://(?:www\.)?imagebam\.com(?:/.*)?',
+        'CyberDrop': r'https?://(?:www\.)?cyberdrop\.me(?:/.*)?'
+    }
+    for platform, pattern in patterns.items():
+        if re.match(pattern, url):
+            return platform
+    return 'Unknown'
+
+def extract_query_params(url):
+    """Extracts query parameters from a URL and returns them as a dictionary."""
+    parsed_url = urlparse(url)
+    return {k: v[0] for k, v in parse_qs(parsed_url.query).items()}
+
 def generate_links(base_link, num_pages):
     """Generate paginated links from base URL."""
     links = []
