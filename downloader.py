@@ -12,6 +12,77 @@ from ttkbootstrap.constants import *
 from image_utils import is_valid_image
 
 
+def download_image_with_retry(session, img_url, filepath, headers, log_message=None, max_retries=5):
+    if log_message is None:
+        def log_message(msg):
+            pass
+
+    for attempt in range(max_retries):
+        try:
+            # Prepare headers for potentially resuming download
+            req_headers = headers.copy()
+            initial_size = 0
+            if os.path.exists(filepath):
+                initial_size = os.path.getsize(filepath)
+                if initial_size > 0:
+                    req_headers['Range'] = f'bytes={initial_size}-'
+
+            img_response = session.get(img_url, timeout=15, headers=req_headers, stream=True)
+
+            if img_response.status_code == 416:
+                # 416 Range Not Satisfiable means we probably already downloaded the whole file
+                log_message(f"  ✓ Already downloaded: {os.path.basename(filepath)}")
+                return True
+
+            if img_response.status_code in [429, 502, 503, 504]:
+                wait_time = 2 ** attempt
+                log_message(f"  ⚠️ HTTP {img_response.status_code} for image. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+
+            if img_response.status_code in [200, 206]:
+                expected_length_header = img_response.headers.get('Content-Length')
+                expected_length = int(expected_length_header) if expected_length_header and expected_length_header.isdigit() else None
+
+                if img_response.status_code == 206:
+                    mode = 'ab'
+                    if expected_length:
+                        expected_length += initial_size
+                else:
+                    # Fallback if server doesn't support range requests
+                    mode = 'wb'
+                    initial_size = 0
+
+                downloaded_size = initial_size
+                with open(filepath, mode) as f:
+                    for chunk in img_response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded_size += len(chunk)
+
+                if expected_length and downloaded_size < expected_length:
+                    log_message(f"  ⚠️ Incomplete download ({downloaded_size}/{expected_length} bytes). Retrying...")
+                    wait_time = 2 ** attempt
+                    time.sleep(wait_time)
+                    continue
+
+                return True
+            else:
+                log_message(f"  ✗ Failed: HTTP {img_response.status_code}")
+                return False
+
+        except requests.RequestException as e:
+            wait_time = 2 ** attempt
+            log_message(f"  ⚠️ Connection error: {str(e)[:50]}. Retrying in {wait_time}s...")
+            time.sleep(wait_time)
+        except OSError as e:
+            log_message(f"  ✗ OS Error (e.g. disk space): {str(e)[:50]}")
+            raise
+
+    log_message(f"  ✗ Failed after {max_retries} attempts.")
+    return False
+
+
 def build_download_frame(parent, config_path, urls_file):
     """
     Returns a Frame that downloads images using pure requests (no browser).
@@ -45,69 +116,6 @@ def build_download_frame(parent, config_path, urls_file):
     def log_message(msg):
         log_text.insert(tk.END, msg + "\n")
         log_text.see(tk.END)
-
-    def download_image_with_retry(session, img_url, filepath, headers, max_retries=5):
-        for attempt in range(max_retries):
-            try:
-                # Prepare headers for potentially resuming download
-                req_headers = headers.copy()
-                initial_size = 0
-                if os.path.exists(filepath):
-                    initial_size = os.path.getsize(filepath)
-                    if initial_size > 0:
-                        req_headers['Range'] = f'bytes={initial_size}-'
-
-                img_response = session.get(img_url, timeout=15, headers=req_headers, stream=True)
-
-                if img_response.status_code == 416:
-                    # 416 Range Not Satisfiable means we probably already downloaded the whole file
-                    log_message(f"  ✓ Already downloaded: {os.path.basename(filepath)}")
-                    return True
-
-                if img_response.status_code in [429, 502, 503, 504]:
-                    wait_time = 2 ** attempt
-                    log_message(f"  ⚠️ HTTP {img_response.status_code} for image. Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                    continue
-
-                if img_response.status_code in [200, 206]:
-                    expected_length_header = img_response.headers.get('Content-Length')
-                    expected_length = int(expected_length_header) if expected_length_header and expected_length_header.isdigit() else None
-
-                    if img_response.status_code == 206:
-                        mode = 'ab'
-                        if expected_length:
-                            expected_length += initial_size
-                    else:
-                        # Fallback if server doesn't support range requests
-                        mode = 'wb'
-                        initial_size = 0
-
-                    downloaded_size = initial_size
-                    with open(filepath, mode) as f:
-                        for chunk in img_response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                                downloaded_size += len(chunk)
-
-                    if expected_length and downloaded_size < expected_length:
-                        log_message(f"  ⚠️ Incomplete download ({downloaded_size}/{expected_length} bytes). Retrying...")
-                        wait_time = 2 ** attempt
-                        time.sleep(wait_time)
-                        continue
-
-                    return True
-                else:
-                    log_message(f"  ✗ Failed: HTTP {img_response.status_code}")
-                    return False
-
-            except requests.RequestException as e:
-                wait_time = 2 ** attempt
-                log_message(f"  ⚠️ Connection error: {str(e)[:50]}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-
-        log_message(f"  ✗ Failed after {max_retries} attempts.")
-        return False
 
     def show_cookie_instructions():
         """Show instructions for extracting cookies"""
@@ -375,7 +383,7 @@ NOTE: Cookies expire! If download fails, extract fresh cookies.
                                 filename = f"image_{len(os.listdir(combined_output_dir)) + 1}.jpg"
                                 filepath = os.path.join(combined_output_dir, filename)
 
-                                success = download_image_with_retry(session, img_url, filepath, img_headers)
+                                success = download_image_with_retry(session, img_url, filepath, img_headers, log_message=log_message)
                                 
                                 if success:
                                     page_downloaded += 1
