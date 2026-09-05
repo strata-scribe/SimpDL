@@ -2,7 +2,9 @@ import os
 import queue
 import threading
 from urllib.parse import urlparse
+
 import requests
+
 
 class BatchDownloader:
     def __init__(self, num_workers=4):
@@ -37,8 +39,7 @@ class BatchDownloader:
         response.raise_for_status()
 
         with open(dest_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+            f.writelines(response.iter_content(chunk_size=8192))
 
     def worker(self, dest_dir):
         """Worker thread to process items from the queue."""

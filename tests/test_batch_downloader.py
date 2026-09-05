@@ -1,7 +1,9 @@
 import os
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from batch_downloader import BatchDownloader
+
 
 class TestBatchDownloader(unittest.TestCase):
     def setUp(self):
@@ -30,7 +32,7 @@ class TestBatchDownloader(unittest.TestCase):
             mock_get.assert_called_once_with("http://example.com/image.jpg", stream=True, timeout=10)
             mock_response.raise_for_status.assert_called_once()
             mock_file.assert_called_once_with(os.path.join("/tmp", "image.jpg"), 'wb')
-            mock_file().write.assert_called_with(b"data chunk")
+            mock_file().writelines.assert_called_with([b"data chunk"])
 
     @patch('batch_downloader.requests.get')
     def test_download_item_failure(self, mock_get):
@@ -54,7 +56,7 @@ class TestBatchDownloader(unittest.TestCase):
 
         def side_effect_download(url, dest_dir):
             if "bad" in url:
-                raise Exception("Simulated Failure")
+                raise RuntimeError("Simulated Failure")
 
         mock_download_item.side_effect = side_effect_download
 
