@@ -1,8 +1,7 @@
-import pytest
-import asyncio
-import os
 import aiohttp
+import pytest
 from aiohttp import web
+
 from downloader_async import AsyncChunkedDownloader
 
 # Mock aiohttp server for testing
@@ -46,7 +45,7 @@ async def handle_no_size_head(request):
 request_counts = {}
 
 async def handle_flaky_get(request):
-    global request_counts
+    global request_counts  # noqa: PLW0602
     range_header = request.headers.get('Range')
 
     if not range_header:
@@ -81,6 +80,7 @@ async def handle_flaky_head(request):
     return web.Response(status=200, headers=headers)
 
 import pytest_asyncio
+
 
 @pytest_asyncio.fixture
 async def aiohttp_server_mock(aiohttp_server):
@@ -123,7 +123,7 @@ async def test_async_chunked_downloader_no_size(aiohttp_server_mock, tmp_path):
 @pytest.mark.asyncio
 async def test_async_chunked_downloader_retry(aiohttp_server_mock, tmp_path):
     # Reset counts
-    global request_counts
+    global request_counts  # noqa: PLW0602
     request_counts.clear()
 
     url = f"http://{aiohttp_server_mock.host}:{aiohttp_server_mock.port}/flaky"
@@ -139,7 +139,7 @@ async def test_async_chunked_downloader_retry(aiohttp_server_mock, tmp_path):
 @pytest.mark.asyncio
 async def test_async_chunked_downloader_retry_failure(aiohttp_server_mock, tmp_path):
     # Reset counts
-    global request_counts
+    global request_counts  # noqa: PLW0602
     request_counts.clear()
 
     url = f"http://{aiohttp_server_mock.host}:{aiohttp_server_mock.port}/flaky"
