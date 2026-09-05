@@ -104,7 +104,7 @@ def main_gui():
         try:
             icon_img = tk.PhotoImage(file=icon_path)
             app.iconphoto(False, icon_img)
-        except:
+        except Exception:
             pass
 
     # Remove default border
