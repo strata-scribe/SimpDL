@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import tkinter as tk
@@ -473,4 +474,11 @@ def main_gui():
     app.mainloop()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="SimpDL - Advanced Download Engine")
+    parser.add_argument("--output-dir", type=str, help="Specify the default output directory for downloads")
+    parser.add_argument("--cookies-file", type=str, help="Specify the path to the cookies JSON file")
+    parser.add_argument("--max-concurrent", type=int, help="Maximum number of concurrent downloads")
+    parser.add_argument("--format", type=str, help="Specify the download format")
+    args = parser.parse_args()
+
     main_gui()
